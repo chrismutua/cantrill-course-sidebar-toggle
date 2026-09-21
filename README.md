@@ -20,9 +20,9 @@ If you prefer a distraction-free lecture view, or often work on a small screen w
 
 ## 📸 Preview
 
-<img width="556" height="1356" alt="image" src="https://github.com/user-attachments/assets/a9b7c0ac-4920-46cb-a918-ac1eb0989b24" />
+<img width="400" height="400" alt="image" src="https://github.com/user-attachments/assets/a9b7c0ac-4920-46cb-a918-ac1eb0989b24" />
 
-<img width="642" height="1362" alt="image" src="https://github.com/user-attachments/assets/467b5209-76ab-4a73-8b7c-65895ed4634d" />
+<img width="400" height="400" alt="image" src="https://github.com/user-attachments/assets/467b5209-76ab-4a73-8b7c-65895ed4634d" />
 
 
 ---
