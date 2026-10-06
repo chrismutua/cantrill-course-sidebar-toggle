@@ -14,12 +14,19 @@ import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 
 const REPO = 'chrismutua/cantrill-course-sidebar-toggle';
-const BRANCH = 'main';
 const MATCH = 'https://learn.cantrill.io/*';
 const REQUIRED_GRANTS = ['GM_addStyle', 'GM_getValue', 'GM_setValue'];
 
-const scriptPath = join(dirname(fileURLToPath(import.meta.url)), '..', 'cantrill-sidebar-toggle.user.js');
+const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
+const scriptPath = join(repoRoot, 'cantrill-sidebar-toggle.user.js');
+const readmePath = join(repoRoot, 'README.md');
 const source = readFileSync(scriptPath, 'utf8');
+const scriptName = basename(scriptPath);
+
+// Distribution follows the newest release rather than a branch. GitHub's
+// /releases/latest skips drafts and prereleases, so this always serves the
+// newest published tag and never needs editing per release.
+const RELEASE_URL = `https://github.com/${REPO}/releases/latest/download/${scriptName}`;
 
 const failures = [];
 const check = (label, ok, detail) => {
@@ -60,16 +67,24 @@ if (block) {
     check('@namespace', first('namespace') === `https://github.com/${REPO}`, `expected the repo URL, got ${first('namespace')}`);
     check('@author', first('author') !== 'You', 'still the placeholder');
 
-    const expectedUrl = `https://raw.githubusercontent.com/${REPO}/${BRANCH}/${basename(scriptPath)}`;
     for (const key of ['updateURL', 'downloadURL']) {
-        check(`@${key}`, first(key) === expectedUrl, `expected ${expectedUrl}, got ${first(key)}`);
+        check(`@${key}`, first(key) === RELEASE_URL, `expected ${RELEASE_URL}, got ${first(key)}`);
         check(`@${key} appears once`, meta.get(key)?.length === 1, 'must appear exactly once');
     }
     check('@updateURL matches @downloadURL', first('updateURL') === first('downloadURL'), 'the two must point at the same file');
+    check('@updateURL asset name', (first('updateURL') ?? '').endsWith(`/${scriptName}`), `the release asset must be named ${scriptName} or the download URL will 404`);
+    check('@updateURL is not a branch URL', !(first('updateURL') ?? '').includes('raw.githubusercontent.com'), 'distribution must follow the latest release, not a branch');
 
     const grants = meta.get('grant') ?? [];
     check('@grant set', REQUIRED_GRANTS.every((g) => grants.includes(g)), `expected ${REQUIRED_GRANTS.join(', ')}`);
 }
+
+// --- README install link -------------------------------------------------
+// The whole point of the release pointer is that the README never needs editing
+// per release, so it must carry exactly that URL. This is what makes "the install
+// section always picks up the latest tag" enforced rather than aspirational.
+const readme = readFileSync(readmePath, 'utf8');
+check('README install link', readme.includes(RELEASE_URL), `README.md must contain ${RELEASE_URL}`);
 
 // --- Report -------------------------------------------------------------
 const name = basename(scriptPath);

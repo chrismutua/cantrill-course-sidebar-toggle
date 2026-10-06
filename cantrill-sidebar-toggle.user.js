@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Sidebar Toggle in Lecture Bar - Cantrill
 // @namespace    https://github.com/chrismutua/cantrill-course-sidebar-toggle
-// @version      1.8
+// @version      1.9
 // @description  Toggle the course sidebar from a labelled button in the lecture toolbar
 // @author       Chris Mutua
 // @match        https://learn.cantrill.io/*
@@ -11,8 +11,8 @@
 // @grant        GM_getValue
 // @homepageURL  https://github.com/chrismutua/cantrill-course-sidebar-toggle
 // @supportURL   https://github.com/chrismutua/cantrill-course-sidebar-toggle/issues
-// @updateURL    https://raw.githubusercontent.com/chrismutua/cantrill-course-sidebar-toggle/main/cantrill-sidebar-toggle.user.js
-// @downloadURL  https://raw.githubusercontent.com/chrismutua/cantrill-course-sidebar-toggle/main/cantrill-sidebar-toggle.user.js
+// @updateURL    https://github.com/chrismutua/cantrill-course-sidebar-toggle/releases/latest/download/cantrill-sidebar-toggle.user.js
+// @downloadURL  https://github.com/chrismutua/cantrill-course-sidebar-toggle/releases/latest/download/cantrill-sidebar-toggle.user.js
 // @license      MIT
 // @noframes
 // ==/UserScript==

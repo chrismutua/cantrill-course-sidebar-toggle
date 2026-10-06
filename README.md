@@ -44,7 +44,9 @@ If you don't already have it, install the Tampermonkey extension for your browse
 
 **Option A — One-click install (recommended):**
 
-👉 [**Click here to install**](https://raw.githubusercontent.com/chrismutua/cantrill-course-sidebar-toggle/main/cantrill-sidebar-toggle.user.js)
+👉 [**Click here to install**](https://github.com/chrismutua/cantrill-course-sidebar-toggle/releases/latest/download/cantrill-sidebar-toggle.user.js)
+
+That link always serves the **newest released version** — it resolves through GitHub's `/releases/latest` pointer, so it never goes stale and you never have to chase a tag. Older versions are on the [Releases page](https://github.com/chrismutua/cantrill-course-sidebar-toggle/releases).
 
 Tampermonkey will open an install dialog. Click **Install**.
 
@@ -107,7 +109,9 @@ The observer never writes styles. When the page changes it only re-checks that t
 
 ## 🔄 Updates
 
-Installed copies update themselves from `main` using the script's `@updateURL`. For an update to be picked up, `@version` in the metadata block must be bumped.
+Installed copies update themselves from the **latest published release** via the script's `@updateURL`, so you always move to the newest tagged version. A change only reaches you once it has been reviewed, merged, and released with a bumped `@version`.
+
+If you installed before 1.9, your copy still checks the old `main` URL for now; it picks up 1.9 on its own, and every update after that follows the latest release. No action needed.
 
 ---
 
@@ -117,6 +121,9 @@ Installed copies update themselves from `main` using the script's `@updateURL`. 
 - Make sure you're on an actual **lecture page**. The button is added to the lecture toolbar (`.lecture-left`), which only exists there — not on the dashboard or course listing. The script does not check the URL; it keys off that toolbar, so if Teachable renames or removes it, the button stops appearing.
 - Refresh the page once after installing the script.
 - Check that Tampermonkey is enabled and the script is toggled on in the extension popup.
+
+### The install link downloads a file instead of opening Tampermonkey
+- GitHub serves release assets as `application/octet-stream`, so a strict browser setup may save the file rather than hand it to Tampermonkey. Open the downloaded file from Tampermonkey's **Utilities → Install from file**, or use **Option B** above.
 
 ### The sidebar pops back in
 - This usually means Teachable changed their DOM. Check that `#courseSidebar` and `.course-sidebar` are still the correct selectors (F12 → Console → `document.querySelector('#courseSidebar')`).
