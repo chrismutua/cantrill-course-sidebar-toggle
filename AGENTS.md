@@ -11,6 +11,7 @@ A single-file Tampermonkey userscript that adds a Show/Hide Sidebar button to
 | :--- | :--- |
 | `cantrill-sidebar-toggle.user.js` | The userscript itself. |
 | `tools/check-userscript.mjs` | Metadata + syntax gate, including the distribution-URL invariants. |
+| `tools/test-userscript.mjs` | Browser regression test for the actual toggle behaviour. |
 | `tools/release.mjs` | Version arithmetic, the PR bump gate, and the tag gate / release notes. |
 | `.github/workflows/check.yml` | Runs the gates on pull requests and on `main`. |
 | `.github/workflows/release.yml` | Publishes a GitHub Release when a `v*` tag is pushed. |
@@ -41,9 +42,10 @@ keep them in agreement.
    `git checkout main && git pull --ff-only && git checkout -b <type>/<slug>`
 3. **Make the change**, then set `@version` in the userscript metadata to that
    version and add a `## [<version>]` section to `CHANGELOG.md`.
-4. **Run the gates locally** — all three must pass:
+4. **Run the gates locally** — all four must pass:
    - `node --check cantrill-sidebar-toggle.user.js`
    - `node tools/check-userscript.mjs`
+   - `node tools/test-userscript.mjs`
    - `node tools/release.mjs verify-bump`
 5. **Commit and push the branch.**
 6. **Open the PR, assigned to the maintainer:**
@@ -90,6 +92,36 @@ keep them in agreement.
 - `@version` == tag (minus `v`) == the `## [<version>]` CHANGELOG section == the
   published release.
 
+## The browser test
+
+`tools/test-userscript.mjs` drives headless Chromium over the DevTools protocol and
+injects the script with `Page.addScriptToEvaluateOnNewDocument`, so it runs at true
+document-start — the execution point where userscript bugs actually live. It asserts
+real computed styles and labels for a fresh install, both stored preferences, and an
+SPA re-render. It needs Node >= 22 (global `WebSocket`) plus Chromium/Chrome on
+`PATH`, or `CHROME_PATH` pointing at one.
+
+It is a required check on pull requests and it runs before a release is published, so
+a functionally broken build can neither merge nor ship.
+
+**The pitfall it exists to catch:** never toggle the sidebar with `style.disabled`.
+Setting that before the style element is connected to the document is silently
+ignored, so the sheet comes up enabled. That shipped in 1.9 as a sidebar that was
+force-hidden on load with a button that did nothing. Toggle a class on `<html>`
+instead, the way `syncHider()` does. No static check can see this class of bug, which
+is exactly why this test is a browser test.
+
+## Recovering from a bad release
+
+1. Fix it on a branch and merge it normally — never rewrite history.
+2. Ship the fix as the **next** version and let it publish **first**. Deleting the bad
+   release before its replacement is live would 404 the install link for everyone.
+3. Then remove the bad release from the listing: `gh release delete <tag> --yes`.
+   **Keep the tag.** Deleting it would make `release.mjs next` return that same version
+   again, and anyone who installed the bad build needs a version *higher* than theirs
+   to receive the fix.
+4. Mark that version as withdrawn in `CHANGELOG.md`, pointing at the fixed release.
+
 ## Environment notes
 
 - `gh` is at `/usr/bin/gh` and needs a token. Non-interactive shells do not
@@ -112,8 +144,9 @@ keep them in agreement.
 
 ## What CI cannot verify
 
-Say so explicitly when a change needs eyes on a real browser, rather than
-implying CI covered it:
+The browser test covers behaviour — that the toggle really hides and shows the
+sidebar. These still need a human, so say so explicitly rather than implying CI
+covered them:
 
 - the toolbar button's appearance against the screenshots in the README;
 - that clicking the one-click install link actually opens Tampermonkey (release

@@ -7,7 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Versions before 1.8 are not recorded here; that history lives in the commit log.
 
+## [1.10]
+
+### Fixed
+
+- **The sidebar toggle works again.** In 1.9 the sidebar was force-hidden from
+  the moment the page loaded — even though the button reported it as shown — and
+  clicking the button changed only the label. The cause was `style.disabled`
+  being set before the style element was connected to the document, which
+  browsers silently ignore, so the hiding rule was always on. The hider is now a
+  rule gated on a class on `<html>`, and that class is the single source of
+  truth for the state, so the button and the visible result can no longer
+  disagree.
+- Corrected the 1.8 claim that the hider was attached at document-start to stop
+  a hidden sidebar painting before it was hidden. At document-start neither
+  `document.head` nor `document.documentElement` exists, so nothing was attached
+  there.
+
+### Added
+
+- A browser regression test, run on every pull request and before every release,
+  so a functionally broken build cannot ship or merge again.
+
+### Changed
+
+- The release job now runs that test before publishing.
+
 ## [1.9]
+
+**Withdrawn.** This release shipped with a broken sidebar toggle: the sidebar
+was force-hidden on load and the button did nothing. The release was removed
+from GitHub; the tag is kept so version numbering and updates stay honest.
+Use [1.10](#110) instead.
 
 ### Changed
 
