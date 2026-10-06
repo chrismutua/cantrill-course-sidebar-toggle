@@ -60,6 +60,16 @@ function browserCandidates() {
     return found;
 }
 
+// Removing Chrome's profile can lose a race with its own writes. A leftover temp
+// directory is harmless, so cleanup must never fail the test.
+function removeProfile(dir) {
+    try {
+        rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    } catch {
+        /* leave it to the OS */
+    }
+}
+
 // Installs GM_* stubs (with a preselected stored value) and then the userscript
 // itself, before the page is parsed.
 function bootstrap(stored) {
@@ -142,8 +152,8 @@ async function launchBrowser() {
         }
 
         if (!wsUrl) {
-            proc.kill();
-            rmSync(userDataDir, { recursive: true, force: true });
+            proc.kill('SIGKILL');
+            removeProfile(userDataDir);
             const tail = stderr.trim().split('\n').slice(-5).join('\n      ');
             const why = proc.exitCode !== null
                 ? `exited with code ${proc.exitCode}`
@@ -214,8 +224,16 @@ async function launch() {
         },
         async close() {
             ws.close();
-            proc.kill();
-            rmSync(userDataDir, { recursive: true, force: true });
+            proc.kill('SIGKILL');
+            // Wait for Chrome to actually exit before touching its profile:
+            // removing the directory while it is still flushing races with the
+            // writes and throws ENOTEMPTY.
+            await new Promise((resolve) => {
+                if (proc.exitCode !== null || proc.signalCode !== null) return resolve();
+                const timer = setTimeout(resolve, 2000);
+                proc.once('exit', () => { clearTimeout(timer); resolve(); });
+            });
+            removeProfile(userDataDir);
         },
     };
 }
