@@ -8,11 +8,21 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  # The job name "check" is the required status-check context for the branch
+  # protection rule on main. Renaming it, or adding a job-level `name`, silently
+  # blocks every merge until branch protection is updated to match.
   check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Tags are needed by the version-bump gate.
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -23,3 +33,7 @@ jobs:
 
       - name: Metadata check
         run: node tools/check-userscript.mjs
+
+      - name: Version bump
+        if: github.event_name == 'pull_request'
+        run: node tools/release.mjs verify-bump

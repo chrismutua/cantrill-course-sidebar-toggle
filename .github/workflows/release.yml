@@ -1,0 +1,79 @@
+name: Release
+
+# Publishing is driven by the tag, never by CI creating tags: a maintainer tags a
+# version that has already been reviewed and merged, and this workflow turns it
+# into a GitHub Release. Distribution (the README install link and the script's
+# @updateURL/@downloadURL) follows /releases/latest, so the release asset must
+# always be uploaded with the same filename.
+on:
+  push:
+    tags: ['v*']
+
+# The repository default for GITHUB_TOKEN is read-only; this job opts in to the
+# one permission it actually needs, rather than raising the default for every
+# workflow.
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  # Never cancel a release part-way through.
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Syntax check
+        run: node --check cantrill-sidebar-toggle.user.js
+
+      - name: Metadata check
+        run: node tools/check-userscript.mjs
+
+      - name: Verify the tag matches @version and extract the release notes
+        run: node tools/release.mjs verify-tag --tag "$GITHUB_REF_NAME" --notes-file release-notes.md
+
+      - name: Publish the release with the userscript as an asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          asset=cantrill-sidebar-toggle.user.js
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            # Re-run of the same tag: replace the asset and notes in place.
+            gh release upload "$GITHUB_REF_NAME" "$asset" --clobber
+            gh release edit "$GITHUB_REF_NAME" \
+              --title "$GITHUB_REF_NAME" \
+              --notes-file release-notes.md \
+              --latest
+          else
+            gh release create "$GITHUB_REF_NAME" "$asset" \
+              --title "$GITHUB_REF_NAME" \
+              --notes-file release-notes.md \
+              --verify-tag \
+              --latest
+          fi
+
+      - name: Verify the install URL now serves this version
+        run: |
+          set -euo pipefail
+          url="https://github.com/${{ github.repository }}/releases/latest/download/cantrill-sidebar-toggle.user.js"
+          version="${GITHUB_REF_NAME#v}"
+          expected="^// @version[[:space:]]+${version//./\\.}[[:space:]]*$"
+          for attempt in 1 2 3; do
+            code="$(curl -sSL --max-time 30 -o /tmp/served.js -w '%{http_code}' "$url" || true)"
+            if [ "$code" = "200" ] && grep -qE "$expected" /tmp/served.js; then
+              echo "OK ${url} serves @version ${version}"
+              exit 0
+            fi
+            echo "attempt ${attempt}: ${url} returned HTTP ${code}; retrying in 5s"
+            sleep 5
+          done
+          echo "FAIL: ${url} did not serve @version ${version}" >&2
+          exit 1
