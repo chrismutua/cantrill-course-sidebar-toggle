@@ -28,13 +28,19 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # The browser test needs the global WebSocket, which is Node >= 22.
+          node-version: 22
 
       - name: Syntax check
         run: node --check cantrill-sidebar-toggle.user.js
 
       - name: Metadata check
         run: node tools/check-userscript.mjs
+
+      # A functionally broken build must never become a release: 1.9 shipped
+      # with the toggle doing nothing, and this is the check that stops it.
+      - name: Browser test
+        run: node tools/test-userscript.mjs
 
       - name: Verify the tag matches @version and extract the release notes
         run: node tools/release.mjs verify-tag --tag "$GITHUB_REF_NAME" --notes-file release-notes.md
