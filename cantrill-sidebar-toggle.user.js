@@ -22,16 +22,15 @@
     const stored = GM_getValue('sidebarState', SHOWN);
     let state = (stored === HIDDEN) ? HIDDEN : SHOWN;
 
-    // ---- Global CSS: hider + button styling ----
+    // ---- Global CSS: button styling ----
     GM_addStyle(`
-        a.tm-sidebar-toggle {
+        .tm-sidebar-toggle {
             display: inline-flex;
             align-items: center;
             gap: 6px;
             padding: 6px 12px;
-            margin-left: 8px;
+            margin: 0 0 0 8px;
             cursor: pointer;
-            text-decoration: none;
             color: #fff;
             background: transparent;
             border: 1px solid currentColor;
@@ -40,24 +39,30 @@
             font-size: 13px;
             font-weight: 600;
             line-height: 1;
+            text-align: center;
             vertical-align: middle;
+            appearance: none;
+            -webkit-appearance: none;
             transition: background 0.15s, color 0.15s, border-color 0.15s;
             white-space: nowrap;
         }
-        a.tm-sidebar-toggle:hover {
+        .tm-sidebar-toggle:hover {
             background: rgba(255,255,255,0.1);
-            text-decoration: none;
             color: #fff;
         }
-        a.tm-sidebar-toggle[data-state="hidden"] {
+        .tm-sidebar-toggle[data-state="hidden"] {
             color: #ff9900;
             border-color: #ff9900;
         }
-        a.tm-sidebar-toggle[data-state="hidden"]:hover {
+        .tm-sidebar-toggle[data-state="hidden"]:hover {
             background: rgba(255,153,0,0.15);
             color: #ff9900;
         }
-        a.tm-sidebar-toggle svg {
+        .tm-sidebar-toggle:focus-visible {
+            outline: 2px solid #ff9900;
+            outline-offset: 2px;
+        }
+        .tm-sidebar-toggle svg {
             width: 16px;
             height: 16px;
             display: block;
@@ -92,19 +97,30 @@
         return s === HIDDEN ? 'Show Sidebar' : 'Hide Sidebar';
     }
 
+    // Single place that renders state into the button, shared by creation and
+    // every later update so the two can never drift apart.
+    function applyButtonState(btn) {
+        btn.dataset.state = state;
+        btn.setAttribute('aria-label', labelFor(state));
+        // Disclosure semantics: this button controls the sidebar's visibility.
+        // aria-expanded rather than aria-pressed, because the accessible name
+        // already describes the action and changes with the state.
+        btn.setAttribute('aria-expanded', String(state === SHOWN));
+        btn.setAttribute('title', labelFor(state) + ' (Alt+S)');
+        const span = btn.querySelector('.tm-sidebar-toggle-label');
+        if (span) span.textContent = labelFor(state);
+    }
+
     function makeButton() {
-        if (document.querySelector('.lecture-left a.tm-sidebar-toggle')) return;
+        if (document.querySelector('.lecture-left .tm-sidebar-toggle')) return;
 
         const left = document.querySelector('.lecture-left');
         if (!left) return;
 
-        const a = document.createElement('a');
-        a.className = 'tm-sidebar-toggle';
-        a.setAttribute('role', 'button');
-        a.setAttribute('aria-label', labelFor(state));
-        a.setAttribute('title', labelFor(state) + ' (Alt+S)');
-        a.dataset.state = state;
-        a.innerHTML = `
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'tm-sidebar-toggle';
+        btn.innerHTML = `
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
                  aria-hidden="true">
@@ -112,31 +128,23 @@
                 <line x1="3" y1="12" x2="21" y2="12"></line>
                 <line x1="3" y1="18" x2="21" y2="18"></line>
             </svg>
-            <span class="tm-sidebar-toggle-label">${labelFor(state)}</span>
+            <span class="tm-sidebar-toggle-label"></span>
         `;
-        a.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            toggle();
-        });
+        applyButtonState(btn);
+        btn.addEventListener('click', toggle);
 
         // Insert right after the home/back icon
         const back = left.querySelector('a.nav-icon-back');
         if (back && back.nextSibling) {
-            left.insertBefore(a, back.nextSibling);
+            left.insertBefore(btn, back.nextSibling);
         } else {
-            left.insertBefore(a, left.firstChild);
+            left.insertBefore(btn, left.firstChild);
         }
     }
 
     function updateButtonState() {
-        const a = document.querySelector('.lecture-left a.tm-sidebar-toggle');
-        if (!a) return;
-        a.dataset.state = state;
-        a.setAttribute('aria-label', labelFor(state));
-        a.setAttribute('title', labelFor(state) + ' (Alt+S)');
-        const span = a.querySelector('.tm-sidebar-toggle-label');
-        if (span) span.textContent = labelFor(state);
+        const btn = document.querySelector('.lecture-left .tm-sidebar-toggle');
+        if (btn) applyButtonState(btn);
     }
 
     function toggle() {
