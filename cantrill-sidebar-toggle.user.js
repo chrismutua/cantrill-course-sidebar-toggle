@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Sidebar Toggle in Lecture Bar - Cantrill
 // @namespace    https://github.com/chrismutua/cantrill-course-sidebar-toggle
-// @version      1.10
+// @version      1.11
 // @description  Toggle the course sidebar from a labelled button in the lecture toolbar
 // @author       Chris Mutua
 // @match        https://learn.cantrill.io/*
@@ -28,7 +28,7 @@
     const stored = GM_getValue('sidebarState', SHOWN);
     let state = (stored === HIDDEN) ? HIDDEN : SHOWN;
 
-    // ---- Global CSS: button styling + sidebar hider ----
+    // ---- Global CSS: button styling ----
     GM_addStyle(`
         .tm-sidebar-toggle {
             display: inline-flex;
@@ -74,27 +74,31 @@
             display: block;
             flex: 0 0 auto;
         }
+    `);
 
-        /* The sidebar hider. This rule is always present but inert until
-           <html> carries the class, so toggling is a plain class flip. It
-           deliberately does not use style.disabled: setting that before the
-           element is connected is silently ignored, which caused the sidebar
-           to be force-hidden while the button claimed it was shown. */
-        html.tm-sidebar-hidden #courseSidebar,
-        html.tm-sidebar-hidden .course-sidebar {
+    // ---- Sidebar hider ----
+    // A dedicated style element whose rule is switched on and off: the same
+    // mechanism this plugin used while it worked. `disabled` is only honoured
+    // once the element is connected, so it is always assigned *after* the
+    // append. Assigning it on a detached element is silently ignored, which is
+    // what force-hid the sidebar in 1.9.
+    const hiderStyle = document.createElement('style');
+    hiderStyle.id = 'tm-sidebar-hider-style';
+    hiderStyle.textContent = `
+        #courseSidebar,
+        .course-sidebar {
             display: none !important;
             visibility: hidden !important;
         }
-    `);
+    `;
 
-    // ---- Sidebar state ----
-    // The class on <html> is the single source of truth for hiding, so the
-    // visible state can never drift from what the button reports. At
-    // document-start documentElement does not exist yet, so this call is a
-    // no-op there; install() and the observer run it again once it does.
     function syncHider() {
-        if (!document.documentElement) return;
-        document.documentElement.classList.toggle('tm-sidebar-hidden', state === HIDDEN);
+        if (!hiderStyle.isConnected) {
+            const target = document.head || document.documentElement;
+            if (!target) return;   // document-start: nothing to attach to yet
+            target.appendChild(hiderStyle);
+        }
+        hiderStyle.disabled = (state !== HIDDEN);
     }
     syncHider();
 
@@ -137,7 +141,14 @@
             <span class="tm-sidebar-toggle-label"></span>
         `;
         applyButtonState(btn);
-        btn.addEventListener('click', toggle);
+        // Keep the click to ourselves: letting it bubble lets the site react to
+        // it, which is what made the sidebar close and immediately reopen. The
+        // version that worked for everyone had both of these calls.
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            toggle();
+        });
 
         // Insert right after the home/back icon
         const back = left.querySelector('a.nav-icon-back');

@@ -104,12 +104,20 @@ SPA re-render. It needs Node >= 22 (global `WebSocket`) plus Chromium/Chrome on
 It is a required check on pull requests and it runs before a release is published, so
 a functionally broken build can neither merge nor ship.
 
-**The pitfall it exists to catch:** never toggle the sidebar with `style.disabled`.
-Setting that before the style element is connected to the document is silently
-ignored, so the sheet comes up enabled. That shipped in 1.9 as a sidebar that was
-force-hidden on load with a button that did nothing. Toggle a class on `<html>`
-instead, the way `syncHider()` does. No static check can see this class of bug, which
-is exactly why this test is a browser test.
+**Two pitfalls it exists to catch.** Both have shipped as broken releases, and no
+static check can see either one:
+
+1. **`style.disabled` is only honoured once the element is attached.** Assigning it
+   on a detached `<style>` is silently ignored, so the sheet comes up enabled. That
+   was 1.9: the sidebar was force-hidden on load while the button said it was shown.
+   `syncHider()` therefore attaches the element *first* and assigns `disabled` after.
+2. **The click must not bubble.** Its handler calls `preventDefault()` and
+   `stopPropagation()`. Without them the page sees the click, reacts, and reopens the
+   sidebar a moment later - that was 1.10. Removing either call is a regression, not a
+   cleanup: they look redundant on a `<button>` but they are load-bearing.
+
+That is why this test is a browser test: it drives the script at true document-start
+and reads real computed styles, which is the only way either failure shows up.
 
 ## Recovering from a bad release
 

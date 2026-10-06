@@ -7,7 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Versions before 1.8 are not recorded here; that history lives in the commit log.
 
+## [1.11]
+
+### Fixed
+
+- **The sidebar no longer closes and immediately reopens.** 1.10 restored the
+  toggle but let the click bubble out of the button, so the page reacted to it
+  and undid the hiding a moment later. The click is now kept to ourselves with
+  `preventDefault()` and `stopPropagation()`, which is what the version that
+  worked had always done - both calls were dropped in 1.8.
+
+### Changed
+
+- **The hider is back to a dedicated `<style>` element switched on and off with
+  `disabled`** (id `tm-sidebar-hider-style`), instead of a class on `<html>`.
+  That is the mechanism this plugin used while it worked. One detail is
+  deliberately not restored: `disabled` is assigned only *after* the element is
+  attached, because assigning it on a detached element is silently ignored -
+  that was the defect behind 1.9.
+
+### Notes
+
+- Measured in headless Chromium, the click isolation prevents a page that reacts
+  to the click from undoing the hide, as long as it reacts with an ordinary
+  bubble-phase listener. A page that reacts in the **capture** phase, or that
+  re-opens itself on a timer or resize observer, would still win; no CSS-only
+  hider can defend against its own markup being replaced.
+
 ## [1.10]
+
+**Withdrawn.** This release fixed the 1.9 failure but left the toggle flashing:
+clicking Hide closed the sidebar and it reopened immediately. The release was
+removed from GitHub; the tag is kept so version numbering and updates stay
+honest. Use [1.11](#111) instead.
 
 ### Fixed
 

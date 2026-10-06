@@ -101,7 +101,7 @@ const PROBE = `(() => {
         displayByClass: byClass ? getComputedStyle(byClass).display : 'MISSING',
         visibilityById: byId ? getComputedStyle(byId).visibility : 'MISSING',
         label: button ? button.textContent.trim() : 'NO BUTTON',
-        htmlClass: document.documentElement.className,
+        hiderDisabled: document.getElementById('tm-sidebar-hider-style')?.disabled ?? 'MISSING',
         buttons: document.querySelectorAll('.tm-sidebar-toggle').length,
         startupError: window.__startupError ?? null,
     };
@@ -257,9 +257,9 @@ try {
     const fresh = await browser.openPage({});
     let view = await fresh.probe();
     check('sidebar visible on load', view.displayById, 'block');
-    check('class-based sidebar also visible', view.displayByClass, 'block');
+    check('sidebar matched by class also visible', view.displayByClass, 'block');
     check('label reads Hide Sidebar', view.label, 'Hide Sidebar');
-    check('html carries no hiding class', view.htmlClass, '');
+    check('hider rule is off on load', view.hiderDisabled, true);
     check('exactly one button', view.buttons, 1);
     check('no error during startup', view.startupError, null);
 
@@ -268,20 +268,20 @@ try {
     check('after click: sidebar hidden', view.displayById, 'none');
     check('after click: sidebar hidden (class selector)', view.displayByClass, 'none');
     check('after click: label reads Show Sidebar', view.label, 'Show Sidebar');
-    check('after click: html carries the hiding class', view.htmlClass, 'tm-sidebar-hidden');
+    check('after click: hider rule is on', view.hiderDisabled, false);
 
     await fresh.click();
     view = await fresh.probe();
     check('after second click: sidebar visible again', view.displayById, 'block');
     check('after second click: label reads Hide Sidebar', view.label, 'Hide Sidebar');
-    check('after second click: hiding class removed', view.htmlClass, '');
+    check('after second click: hider rule is off', view.hiderDisabled, true);
 
     console.log('\nreturning user who had hidden it');
     const hidden = await browser.openPage({ sidebarState: 'hidden' });
     view = await hidden.probe();
     check('hidden on load', view.displayById, 'none');
     check('label reads Show Sidebar', view.label, 'Show Sidebar');
-    check('hiding class applied on load', view.htmlClass, 'tm-sidebar-hidden');
+    check('hider rule is on for a stored hidden preference', view.hiderDisabled, false);
     await hidden.click();
     view = await hidden.probe();
     check('after click: sidebar visible', view.displayById, 'block');
