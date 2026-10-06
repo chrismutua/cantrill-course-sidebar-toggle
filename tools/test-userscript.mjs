@@ -46,18 +46,18 @@ function check(label, actual, expected) {
     }
 }
 
-function findBrowser() {
-    const candidates = [process.env.CHROME_PATH, 'chromium', 'chromium-browser', 'google-chrome', 'google-chrome-stable'].filter(Boolean);
-    for (const candidate of candidates) {
-        if (candidate.includes('/')) {
-            if (existsSync(candidate)) return candidate;
-            continue;
-        }
-        for (const dir of (process.env.PATH ?? '').split(':')) {
-            if (dir && existsSync(join(dir, candidate))) return join(dir, candidate);
-        }
+// Resolve every plausible Chromium/Chrome binary, in preference order, so a
+// broken one can be skipped instead of failing the whole run.
+function browserCandidates() {
+    const names = [process.env.CHROME_PATH, 'chromium', 'chromium-browser', 'google-chrome', 'google-chrome-stable'].filter(Boolean);
+    const found = [];
+    for (const name of names) {
+        const resolved = name.includes('/')
+            ? name
+            : (process.env.PATH ?? '').split(':').filter(Boolean).map((dir) => join(dir, name)).find((path) => existsSync(path));
+        if (resolved && existsSync(resolved) && !found.includes(resolved)) found.push(resolved);
     }
-    return null;
+    return found;
 }
 
 // Installs GM_* stubs (with a preselected stored value) and then the userscript
@@ -97,33 +97,76 @@ const PROBE = `(() => {
     };
 })()`;
 
-async function launch() {
-    const browserPath = findBrowser();
-    if (!browserPath) {
+// Start a browser and wait for its DevTools endpoint, trying each candidate in
+// turn. Chrome's stderr is captured so a failure here reports what the browser
+// actually said, instead of a bare timeout.
+async function launchBrowser() {
+    const candidates = browserCandidates();
+    if (candidates.length === 0) {
         console.error('FAIL test-userscript.mjs — no Chromium/Chrome found. Set CHROME_PATH to one.');
         process.exit(1);
     }
-    const userDataDir = mkdtempSync(join(tmpdir(), 'sidebar-test-'));
-    const proc = spawn(browserPath, [
-        '--headless=new', '--disable-gpu', '--no-sandbox', '--disable-dev-shm-usage',
-        '--no-first-run', '--remote-debugging-port=0', `--user-data-dir=${userDataDir}`, 'about:blank',
-    ], { stdio: 'ignore' });
+    const problems = [];
+    for (const browserPath of candidates) {
+        const userDataDir = mkdtempSync(join(tmpdir(), 'sidebar-test-'));
+        const proc = spawn(browserPath, [
+            '--headless=new', '--disable-gpu', '--no-sandbox', '--disable-dev-shm-usage',
+            '--no-first-run', '--remote-debugging-port=0', `--user-data-dir=${userDataDir}`, 'about:blank',
+        ], { stdio: ['ignore', 'ignore', 'pipe'] });
 
-    const portFile = join(userDataDir, 'DevToolsActivePort');
-    for (let i = 0; i < 100 && !existsSync(portFile); i++) await new Promise((r) => setTimeout(r, 100));
-    if (!existsSync(portFile)) {
-        proc.kill();
-        console.error('FAIL test-userscript.mjs — Chromium never opened its debugging port.');
-        process.exit(1);
+        let stderr = '';
+        proc.stderr.setEncoding('utf8');
+        proc.stderr.on('data', (chunk) => { stderr += chunk; });
+
+        const portFile = join(userDataDir, 'DevToolsActivePort');
+        const deadline = Date.now() + 30000;
+        let wsUrl = null;
+        while (Date.now() < deadline) {
+            const announced = stderr.match(/DevTools listening on (ws:\/\/\S+)/);
+            if (announced) {
+                wsUrl = announced[1];
+                break;
+            }
+            if (existsSync(portFile)) {
+                try {
+                    const port = readFileSync(portFile, 'utf8').split('\n')[0].trim();
+                    const version = await (await fetch(`http://127.0.0.1:${port}/json/version`)).json();
+                    wsUrl = version.webSocketDebuggerUrl;
+                    break;
+                } catch {
+                    // The port file can appear just before the endpoint answers.
+                }
+            }
+            if (proc.exitCode !== null) break;
+            await new Promise((r) => setTimeout(r, 100));
+        }
+
+        if (!wsUrl) {
+            proc.kill();
+            rmSync(userDataDir, { recursive: true, force: true });
+            const tail = stderr.trim().split('\n').slice(-5).join('\n      ');
+            const why = proc.exitCode !== null
+                ? `exited with code ${proc.exitCode}`
+                : 'did not expose a DevTools endpoint within 30s';
+            problems.push(`${browserPath} ${why}${tail ? `\n      ${tail}` : ''}`);
+            continue;
+        }
+
+        const ws = new WebSocket(wsUrl);
+        await new Promise((resolve, reject) => {
+            ws.addEventListener('open', resolve, { once: true });
+            ws.addEventListener('error', reject, { once: true });
+        });
+        return { browserPath, proc, userDataDir, ws };
     }
-    const port = readFileSync(portFile, 'utf8').split('\n')[0].trim();
-    const version = await (await fetch(`http://127.0.0.1:${port}/json/version`)).json();
 
-    const ws = new WebSocket(version.webSocketDebuggerUrl);
-    await new Promise((r, j) => {
-        ws.addEventListener('open', r, { once: true });
-        ws.addEventListener('error', j, { once: true });
-    });
+    console.error('FAIL test-userscript.mjs — no usable browser:');
+    for (const problem of problems) console.error(`  - ${problem}`);
+    process.exit(1);
+}
+
+async function launch() {
+    const { proc, userDataDir, ws } = await launchBrowser();
 
     let nextId = 0;
     const pending = new Map();
@@ -187,7 +230,7 @@ console.log(`Testing ${scriptPath}`);
 const watchdog = setTimeout(() => {
     console.error('FAIL test-userscript.mjs — timed out.');
     process.exit(1);
-}, 120000);
+}, 240000);
 watchdog.unref?.();
 
 const browser = await launch();
