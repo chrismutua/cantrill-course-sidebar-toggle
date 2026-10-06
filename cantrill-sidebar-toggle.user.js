@@ -17,13 +17,13 @@
     const HIDDEN = 'hidden';
     const SHOWN  = 'shown';
 
-    let state = GM_getValue('sidebarState', HIDDEN);
+    // Anything other than an explicit "hidden" falls back to shown, so a
+    // corrupted or legacy stored value can never strand the user.
+    const stored = GM_getValue('sidebarState', SHOWN);
+    let state = (stored === HIDDEN) ? HIDDEN : SHOWN;
 
     // ---- Global CSS: hider + button styling ----
     GM_addStyle(`
-        /* The actual sidebar hider tag is toggled via .disabled */
-        #tm-sidebar-hider-style:not([disabled]) { /* placeholder */ }
-
         a.tm-sidebar-toggle {
             display: inline-flex;
             align-items: center;
@@ -76,6 +76,16 @@
         }
     `;
     hiderStyle.disabled = (state !== HIDDEN);
+
+    // Attach the hider as early as possible so a hidden sidebar never paints.
+    // document.head may not exist yet at document-start; a <style> element
+    // applies wherever it sits in the document.
+    function ensureHiderStyle() {
+        if (hiderStyle.isConnected) return;
+        const target = document.head || document.documentElement;
+        if (target) target.appendChild(hiderStyle);
+    }
+    ensureHiderStyle();
 
     // ---- Button ----
     function labelFor(s) {
@@ -138,7 +148,7 @@
 
     // ---- Boot ----
     function install() {
-        if (!document.head.contains(hiderStyle)) document.head.appendChild(hiderStyle);
+        ensureHiderStyle();
         makeButton();
     }
 
@@ -153,11 +163,14 @@
     const obs = new MutationObserver(() => {
         if (pending) return;
         pending = true;
-        requestAnimationFrame(() => {
+        // setTimeout rather than requestAnimationFrame: rAF is paused in
+        // background tabs, which would defer the reconcile until the tab is
+        // visible again.
+        setTimeout(() => {
             pending = false;
-            if (!document.head.contains(hiderStyle)) document.head.appendChild(hiderStyle);
-            if (!document.querySelector('.lecture-left a.tm-sidebar-toggle')) makeButton();
-        });
+            ensureHiderStyle();
+            if (!document.querySelector('.lecture-left .tm-sidebar-toggle')) makeButton();
+        }, 50);
     });
     const startObserving = () => obs.observe(document.body, { childList: true, subtree: true });
     if (document.body) startObserving();
@@ -165,9 +178,17 @@
 
     // Alt+S hotkey
     window.addEventListener('keydown', (e) => {
-        if (e.altKey && (e.key === 's' || e.key === 'S')) {
-            e.preventDefault();
-            toggle();
+        // AltGr reports as Ctrl+Alt on Windows, so ignore it: otherwise typing
+        // characters such as "ś" would toggle the sidebar.
+        if (!e.altKey || e.ctrlKey || e.metaKey) return;
+        if (e.key !== 's' && e.key !== 'S' && e.code !== 'KeyS') return;
+        // Never hijack the shortcut while the user is typing.
+        const el = e.target;
+        if (el instanceof Element &&
+            (el.isContentEditable || el.closest('input, textarea, select'))) {
+            return;
         }
+        e.preventDefault();
+        toggle();
     }, true);
 })();
